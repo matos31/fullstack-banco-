@@ -7,10 +7,9 @@ class AuthProvider with ChangeNotifier {
   String? _accessToken;
   String? _refreshToken;
   double _balance = 500.0;
-  
-  
-  String? _username;                         // ADICIONADO
-  String? get username => _username;        // ADICIONADO
+
+  String? _username;
+  String? get username => _username;
 
   bool get isAuthenticated => _accessToken != null;
   String? get accessToken => _accessToken;
@@ -41,15 +40,17 @@ class AuthProvider with ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('accessToken');
     await prefs.remove('refreshToken');
-  
+
     notifyListeners();
   }
+
   void setUsername(String nome) {
-  _username = nome;
-  notifyListeners();
-}
+    _username = nome;
+    notifyListeners();
+  }
+
   Future<bool> login(String cpf, String senha) async {
-    final url = Uri.parse('http://192.168.1.103:8000/api/login/');
+    final url = Uri.parse('http://localhost:8000/api/login/');
     final response = await http.post(
       url,
       headers: {'Content-Type': 'application/json'},
@@ -59,29 +60,28 @@ class AuthProvider with ChangeNotifier {
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       await saveToken(data['access'], data['refresh']);
-      _username = data['nome']; // <- aqui armazenamos o nome
+      _username = data['nome'];
       return true;
     }
     return false;
   }
 
   Future<bool> registerFull(String nome, String cpf, String email, String nascimento, String senha) async {
-  final url = Uri.parse('http://192.168.1.103:8000/api/registro/');
-  final response = await http.post(
-    url,
-    headers: {'Content-Type': 'application/json'},
-    body: jsonEncode({
-      'nome': nome,
-      'cpf': cpf,
-      'email': email,
-      'nascimento': nascimento,
-      'senha': senha,
-    }),
-  );
+    final url = Uri.parse('http://localhost:8000/api/registro/');
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'nome': nome,
+        'cpf': cpf,
+        'email': email,
+        'nascimento': nascimento,
+        'senha': senha,
+      }),
+    );
 
-  return response.statusCode == 201;
-}
-
+    return response.statusCode == 201;
+  }
 
   bool withdraw(double amount) {
     if (_balance >= amount) {
@@ -96,30 +96,26 @@ class AuthProvider with ChangeNotifier {
     _balance += amount;
     notifyListeners();
   }
- Future<Map<String, dynamic>?> fetchValoresAReceber() async {
-  if (_accessToken == null) return null;
 
-  final url = Uri.parse('http://192.168.1.103:8000/api/valores-a-receber/');
-  debugPrint("📡 Chamando backend: $url");
+  Future<Map<String, dynamic>?> fetchValoresAReceber() async {
+    if (_accessToken == null) return null;
 
-  final response = await http.post(
-    url,
-    headers: {
-      'Authorization': 'Bearer $_accessToken',
-    },
-  );
+    final url = Uri.parse('http://localhost:8000/valores-a-receber/');
+    debugPrint("📡 Chamando backend: $url");
 
-  if (response.statusCode == 200) {
-    debugPrint("✅ Sucesso: ${response.body}");
-    return json.decode(response.body);
-  } else {
-    debugPrint("❌ Erro ${response.statusCode}: ${response.body}");
-    return null;
+    final response = await http.post(
+      url,
+      headers: {
+        'Authorization': 'Bearer $_accessToken',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      debugPrint("✅ Sucesso: ${response.body}");
+      return json.decode(response.body);
+    } else {
+      debugPrint("❌ Erro ${response.statusCode}: ${response.body}");
+      return null;
+    }
   }
 }
-
-
-
-}
-
-

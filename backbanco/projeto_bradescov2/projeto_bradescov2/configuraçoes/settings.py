@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-w6kxp7*8fm5&yun_7vt-^o&&85ktpxdl62j#6p$ik^ockx26f$
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['192.168.1.103']
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'app',
 ]
+AUTH_USER_MODEL = 'app.Client'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

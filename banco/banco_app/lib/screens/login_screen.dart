@@ -20,7 +20,7 @@ class LoginScreen extends StatelessWidget {
       final cpf = userController.text.trim();
       final senha = passController.text;
 
-      final url = Uri.parse('http://192.168.1.103:8000/api/login/');
+      final url = Uri.parse('http://localhost:8000/api/login/');
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},

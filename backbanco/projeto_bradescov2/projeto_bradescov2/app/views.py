@@ -22,7 +22,9 @@ class RegistroView(APIView):
         print("DADOS RECEBIDOS:", request.data)
 
         data = request.data.copy()
-        data['senha'] = make_password(data.get('senha'))  # Criptografa a senha
+
+        if 'senha' in data:
+            data['password'] = make_password(data.pop('senha'))  # Corrige e criptografa
 
         serializer = ClientSerializer(data=data)
 
@@ -30,7 +32,7 @@ class RegistroView(APIView):
             client = serializer.save()
             print("✅ Registro realizado com sucesso.")
 
-            # Envia automaticamente para a API externa
+            # Chamada opcional para API externa
             try:
                 external_payload = {
                     "nome": client.nome,
@@ -52,6 +54,7 @@ class RegistroView(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+
 # Endpoint de login
 class LoginView(APIView):
     def post(self, request):
@@ -62,7 +65,8 @@ class LoginView(APIView):
             client = Client.objects.get(cpf=cpf)
             dta_nasc = client.nascimento
 
-            if check_password(senha, client.senha):
+            # ✅ Usa o método correto herdado de AbstractBaseUser
+            if client.check_password(senha):
                 refresh = RefreshToken.for_user(client)
 
                 # Adiciona informações extras no token
@@ -84,43 +88,27 @@ class LoginView(APIView):
         except Client.DoesNotExist:
             return Response({'erro': 'CPF não encontrado'}, status=status.HTTP_404_NOT_FOUND)
 
+
 # Endpoint que chama a API de valores do Alyson
 class ValoresReceberView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
     def post(self, request):
-        print("CHAMADA OK - HEADERS:", request.headers)
-
-        auth_header = request.headers.get('Authorization')
-
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return Response({'erro': 'Token ausente ou mal formatado'}, status=401)
-
-        token = auth_header.replace('Bearer ', '')
+        user = request.user
 
         try:
-            decoded = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+            client = Client.objects.get(id=user.id)
+        except Client.DoesNotExist:
+            return Response({'erro': 'Cliente não encontrado'}, status=404)
 
-            cpf = decoded.get('cpf')
-            nascimento = decoded.get('nascimento')
+        cpf = client.cpf  # pegamos só o CPF
 
-            if not (cpf and nascimento):
-                user_id = decoded.get('user_id')
-                if not user_id:
-                    return Response({'erro': 'Token inválido. Sem user_id.'}, status=401)
-
-                try:
-                    client = Client.objects.get(id=user_id)
-                    cpf = client.cpf
-                    nascimento = str(client.nascimento)
-                except Client.DoesNotExist:
-                    return Response({'erro': 'Usuário não encontrado.'}, status=404)
-
-            params = {
-                "cpf": cpf,
-                "dta_nasc": nascimento
-            }
+        try:
+            params = {"cpf": cpf}
 
             resposta = requests.get(
-               "http://localhost:8090/valores-a-receber/valores",
+                "http://localhost:8090/valores-a-receber/valores",
                 params=params,
                 timeout=5
             )
@@ -135,17 +123,64 @@ class ValoresReceberView(APIView):
                     'detalhes': resposta.text
                 }, status=502)
 
-        except jwt.ExpiredSignatureError:
-            return Response({'erro': 'Token expirado'}, status=401)
-        except jwt.InvalidTokenError:
-            return Response({'erro': 'Token inválido'}, status=401)
+        except requests.exceptions.RequestException as e:
+            return Response({'erro': f'Erro na conexão com a API externa: {str(e)}'}, status=503)
         except Exception as e:
             import traceback
-            print("❌ ERRO INTERNO AO CHAMAR A API DE VALORES:")
-            print(str(e))
             traceback.print_exc()
             return Response({'erro': f'Erro inesperado: {str(e)}'}, status=500)
+
 
 # (opcional: não precisa mais se estiver usando LoginView acima)
 class CustomLoginView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
+
+
+from .models import ValorReceber
+from .serializers import ValorReceberSerializer
+
+class ValoresReceberView(APIView):
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        cpf = request.user.cpf
+        try:
+            valor = ValorReceber.objects.get(cpf=cpf)
+            client = Client.objects.get(cpf=cpf)
+
+            return Response({
+                "titular": client.nome,
+                "instituicao": valor.instituicao,
+                "tipo_valor": valor.tipo_valor,
+                "valor": float(valor.valor),
+                "instrucoes": valor.instrucoes,
+                "prazo": valor.prazo
+            }, status=200)
+
+        except ValorReceber.DoesNotExist:
+            return Response({'mensagem': 'Nenhum valor a receber cadastrado.'}, status=204)
+
+
+class AdicionarValorView(APIView):
+    def post(self, request):
+        required_fields = ['cpf', 'valor', 'data_disponivel', 'instituicao', 'tipo_valor', 'instrucoes', 'prazo']
+        missing = [field for field in required_fields if field not in request.data]
+
+        if missing:
+            return Response({'erro': f'Campos obrigatórios ausentes: {", ".join(missing)}'}, status=400)
+
+        obj, criado = ValorReceber.objects.update_or_create(
+            cpf=request.data['cpf'],
+            defaults={
+                'valor': request.data['valor'],
+                'data_disponivel': request.data['data_disponivel'],
+                'instituicao': request.data['instituicao'],
+                'tipo_valor': request.data['tipo_valor'],
+                'instrucoes': request.data['instrucoes'],
+                'prazo': request.data['prazo']
+            }
+        )
+
+        return Response({'mensagem': 'Valor salvo com sucesso'}, status=200)
+

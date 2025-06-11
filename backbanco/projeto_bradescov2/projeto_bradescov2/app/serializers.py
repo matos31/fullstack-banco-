@@ -21,3 +21,11 @@ class ClientSerializer(serializers.ModelSerializer):
         if Client.objects.filter(cpf=value).exists():
             raise serializers.ValidationError("CPF já está em uso.")
         return value
+
+
+from .models import ValorReceber
+
+class ValorReceberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ValorReceber
+        fields = '__all__'

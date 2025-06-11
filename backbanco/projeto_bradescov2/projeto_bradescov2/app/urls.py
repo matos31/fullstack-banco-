@@ -10,3 +10,11 @@ urlpatterns = [
     # Pode matar tudo abaixo
     path('token/', CustomLoginView.as_view()), 
 ]
+
+
+from .views import ValoresReceberView, AdicionarValorView
+
+urlpatterns += [
+    path('valores-a-receber/', ValoresReceberView.as_view()),
+    path('cadastrar-valor/', AdicionarValorView.as_view()),
+]
